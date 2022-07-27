@@ -20,7 +20,7 @@ These parameters have default values which can be overridden by command line par
 ## build
 
 From the root project folder run the command
-`go build -o ./bin/worker-pool-without-drop-pattern ./src/worker-pool-without-drop-pattern`
+`go build -o ./bin/no-drop-pattern ./src/no-drop-pattern`
 
 ## run
 
@@ -33,7 +33,7 @@ A pool with 10 workers, able to process each request in 1 sec, with a flow of 10
 The average wait time (i.e. the time a request spend before being taken in by one worker) and the average idle time for workers (i.e.the time a worker spends idle just waiting for the next request to come in) are printed on the console at the end of the processing.
 
 From the root project folder run the command
-`./bin/worker-pool-without-drop-pattern -poolSize 10 -reqInterval 100 -procTime 1000 -numReq 100 -haltPoolDuration 0`
+`./bin/no-drop-pattern -poolSize 10 -reqInterval 100 -procTime 1000 -numReq 100 -haltPoolDuration 0`
 
 ### a delay hit all requests after a certain moment
 
@@ -44,4 +44,4 @@ With the following command we introduce an halt of 2 secs after the 1 sec from t
 This is similar to what happens in an high traffic highway. When there are no blockers, all the cars flow more or less at the same speed given that the traffic is high and nobody can go too fast (there is not much space between one car and the next and all lanes are busy). As soon a block occurs, e.g. for a car crash, a queue starts and cars are blocked. When the obstacle is removed and traffic can get back to normal, if the traffic remains heavy, for many hours cars will have to stop for more or less the same amount of time that the previous cars spent blocked.
 
 From the root project folder run the command
-`./bin/worker-pool-without-drop-pattern -poolSize 10 -reqInterval 100 -procTime 1000 -numReq 100 -haltPoolDuration 2000 - haltPoolTime 1000`
+`./bin/no-drop-pattern -poolSize 10 -reqInterval 100 -procTime 1000 -numReq 100 -haltPoolDuration 2000 - haltPoolTime 1000`
