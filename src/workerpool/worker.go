@@ -3,20 +3,18 @@ package workerpool
 import (
 	"fmt"
 	"time"
-
-	"github.com/EnricoPicci/drop-pattern-with-timeout/src/request"
 )
 
-type Worker struct {
+type Worker[T Request] struct {
 	id int
 }
 
-func NewWorker(id int) *Worker {
-	w := Worker{id: id}
+func NewWorker[T Request](id int) *Worker[T] {
+	w := Worker[T]{id: id}
 	return &w
 }
 
-func (w *Worker) start(pool *WorkerPool) {
+func (w *Worker[T]) start(pool *WorkerPool[T]) {
 	fmt.Printf("Worker %v started\n", w.id)
 
 	var startIdleTime = time.Now()
@@ -30,8 +28,8 @@ func (w *Worker) start(pool *WorkerPool) {
 			pool.halt()
 		}
 		// calculate how long the request has been waiting before being picked up by one worker of the pool
-		waitDuration := time.Since(req.Created)
-		req.WaitDuration = waitDuration
+		waitDuration := time.Since(req.GetCreated())
+		req.SetWaitDuration(waitDuration)
 
 		// execute the request
 		w.execReq(req, time.Duration(pool.procTime)*pool.timeUnit)
@@ -45,8 +43,8 @@ func (w *Worker) start(pool *WorkerPool) {
 }
 
 // execute a request
-func (w *Worker) execReq(req request.Request, procTime time.Duration) {
+func (w *Worker[T]) execReq(req Request, procTime time.Duration) {
 	// sleep time that simulates the work done while processing a request
 	time.Sleep(procTime)
-	fmt.Printf("===>>>> Request executed with parameter %v - wait time %v\n", req.Param, req.WaitDuration)
+	fmt.Printf("===>>>> Request executed with parameter %v - wait time %v\n", req.GetParam(), req.GetWaitDuration())
 }

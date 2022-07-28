@@ -47,7 +47,7 @@ func workerPoolWithoutDropPattern(
 
 	// the channel that provides requests to the pool has a buffer equal to the number of requests
 	// this makes sure that the requests can come in at the same rythm even if the pool is halted
-	inPoolCh := make(chan request.Request, numReq)
+	inPoolCh := make(chan *request.Request, numReq)
 
 	pool := workerpool.NewWorkerPool(inPoolCh, poolSize, reqInterval, procTime, numReq, haltPoolTime, haltPoolDuration, timeUnit)
 
@@ -61,7 +61,7 @@ func workerPoolWithoutDropPattern(
 		time.Sleep(time.Duration(intervalBetweenRequests))
 		req := request.Request{Param: i, Created: time.Now(), WaitDuration: 0}
 
-		inPoolCh <- req
+		inPoolCh <- &req
 
 		fmt.Printf("Sent %v\n", req.Param)
 	}
