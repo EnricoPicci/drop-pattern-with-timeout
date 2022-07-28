@@ -5,16 +5,16 @@ import (
 	"time"
 )
 
-type Worker[T Request] struct {
+type Worker[T Request, R *Request] struct {
 	id int
 }
 
-func NewWorker[T Request](id int) *Worker[T] {
-	w := Worker[T]{id: id}
+func NewWorker[T Request, R *Request](id int) *Worker[T, R] {
+	w := Worker[T, R]{id: id}
 	return &w
 }
 
-func (w *Worker[T]) start(pool *WorkerPool[T]) {
+func (w *Worker[T, R]) start(pool *WorkerPool[T]) {
 	fmt.Printf("Worker %v started\n", w.id)
 
 	var startIdleTime = time.Now()
@@ -43,7 +43,7 @@ func (w *Worker[T]) start(pool *WorkerPool[T]) {
 }
 
 // execute a request
-func (w *Worker[T]) execReq(req Request, procTime time.Duration) {
+func (w *Worker[T, R]) execReq(req Request, procTime time.Duration) {
 	// sleep time that simulates the work done while processing a request
 	time.Sleep(procTime)
 	fmt.Printf("===>>>> Request executed with parameter %v - wait time %v\n", req.GetParam(), req.GetWaitDuration())
