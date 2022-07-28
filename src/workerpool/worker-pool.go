@@ -22,6 +22,8 @@ type WorkerPool struct {
 	inChan chan request.Request
 	// wait group used to control the closing of the pool
 	wgPool sync.WaitGroup
+	// requests processed
+	requests []request.Request
 
 	// a flag that signals if the halt period has already passed
 	muHaltPeriodPassedCounter sync.Mutex
@@ -31,8 +33,9 @@ type WorkerPool struct {
 	// measure the time spent by workers idle, i.e. ready to process a request but with no request coming in
 	muWorkersIdleTime sync.Mutex
 	workersIdleTime   time.Duration
+	// protect the update of request related data
+	muReq sync.Mutex
 	// measure the time spent by requests waiting to be taken in by a worker
-	muReqWaitTime         sync.Mutex
 	cumulativeReqWaitTime time.Duration
 
 	timeUnit time.Duration
@@ -55,6 +58,8 @@ func NewWorkerPool(
 		haltPoolTime:     haltPoolTime,
 		haltPoolDuration: haltPoolDuration,
 		timeUnit:         timeUnit,
+
+		requests: make([]request.Request, 0, numReq),
 	}
 	return &wp
 }
@@ -82,11 +87,12 @@ func (wp *WorkerPool) Stop() {
 }
 
 // add the time a request has waited before the pool has taken it in to start its processing
-func (wp *WorkerPool) addRequestWaitTime(req request.Request) {
+func (wp *WorkerPool) addRequest(req request.Request) {
+	wp.muReq.Lock()
+	wp.requests = append(wp.requests, req)
 	// update the cumulative wait time
-	wp.muReqWaitTime.Lock()
 	wp.cumulativeReqWaitTime = wp.cumulativeReqWaitTime + req.WaitDuration
-	wp.muReqWaitTime.Unlock()
+	wp.muReq.Unlock()
 }
 
 // add the time spent idle
@@ -104,6 +110,11 @@ func (wp *WorkerPool) AvgWorkerIdleTime() time.Duration {
 // returns the average time a request has been waiting from the moment it has been created and the moment a worker has taken it in to start its processing
 func (wp *WorkerPool) AvgRequestWaitTime(numReq int) time.Duration {
 	return time.Duration(int(wp.cumulativeReqWaitTime) / numReq)
+}
+
+// returns the requests processed
+func (wp *WorkerPool) GetRequests() []request.Request {
+	return wp.requests
 }
 
 // returns true if the pool has to be halted, i.e. if the time when the halt has to occurr has passed and the duration of the halt has not been passed
