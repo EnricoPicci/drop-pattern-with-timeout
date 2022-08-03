@@ -1,13 +1,12 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/EnricoPicci/drop-pattern-with-timeout/src/request"
+	"github.com/EnricoPicci/drop-pattern-with-timeout/src/waitingroom"
 	"github.com/EnricoPicci/drop-pattern-with-timeout/src/workerpool"
 )
 
@@ -15,9 +14,6 @@ import (
 
 // time unit utilized to calculate durations
 var timeUnit = time.Millisecond
-
-var muReqDropped sync.Mutex
-var requestDropped = 0
 
 func main() {
 	poolSize := flag.Int("poolSize", 10, "number of workers in the worker pool")
@@ -34,10 +30,14 @@ func main() {
 	})
 	fmt.Print("\n")
 
-	avgIdleTime, avgWaitTime := workerPoolWithDropPattern(*poolSize, *reqInterval, *procTime, *numReq, *haltPoolTime, *haltPoolDuration, *timeout)
+	avgIdleTime, avgWaitTime, requestsSentToPool, requestsDropped := workerPoolWithDropPattern(
+		*poolSize, *reqInterval, *procTime, *numReq, *haltPoolTime, *haltPoolDuration, *timeout,
+	)
 
 	fmt.Printf("Average idle time for a worker: %v\n", avgIdleTime)
 	fmt.Printf("Average wait time for a request: %v\n", avgWaitTime)
+	fmt.Printf("Number of requests sent to pool: %v\n", len(requestsSentToPool))
+	fmt.Printf("Number of requests dropped: %v\n", len(requestsDropped))
 }
 
 func workerPoolWithDropPattern(
@@ -47,65 +47,43 @@ func workerPoolWithDropPattern(
 	numReq int,
 	haltPoolTime int,
 	haltPoolDuration int,
-	timeout int) (idleTime time.Duration, waitTime time.Duration) {
+	timeout int) (idleTime time.Duration, waitTime time.Duration, requestsProcessed []request.Request, requestsDropped []request.Request) {
 
 	fmt.Println("Start processing requests")
 	fmt.Print("\n")
 
 	// the channel that provides requests to the pool is unbuffered - this is mandatory for the drop pattern to work
 	inPoolCh := make(chan request.Request)
-
 	pool := workerpool.NewWorkerPool(inPoolCh, poolSize, reqInterval, procTime, numReq, haltPoolTime, haltPoolDuration, timeUnit)
+
+	// the channel that allows request to enter the waiting room
+	waitingRoomCh := make(chan request.Request)
+	waitingRoom := waitingroom.New(waitingRoomCh, inPoolCh, timeout, timeUnit)
 
 	// start the worker pool
 	pool.Start()
-
-	ctx := context.Background()
-
-	var wgReq sync.WaitGroup
+	// start the waiting room
+	waitingRoom.Open()
 
 	// we simulate a stream of incoming requests
 	for i := 0; i < numReq; i++ {
 		// interval between each incoming request
 		var intervalBetweenRequests = time.Duration(reqInterval) * timeUnit
 		time.Sleep(time.Duration(intervalBetweenRequests))
-		req := request.Request{Param: i, Created: time.Now(), WaitDuration: 0}
+		req := request.Request{Param: i, Created: time.Now()}
 
-		wgReq.Add(1)
-
-		// within this goroutine we implement the drop with timeout pattern
-		go processOrDrop(ctx, req, inPoolCh, &wgReq, timeout)
-
-		fmt.Printf("Sent %v\n", req.Param)
+		// the request is sent to the waiting room
+		waitingRoom.LetIn(req)
 	}
 
-	// wait for all the gouroutines launched for each request to either be able to pass the request to the pool or to drop it
-	wgReq.Wait()
+	// close the waiting room since there are no more requests that can arrive
+	waitingRoom.Close()
 	// when there are no more requests that can enter the pool we can stop the pool
 	pool.Stop()
 
 	idleTime = pool.AvgWorkerIdleTime()
 	waitTime = pool.AvgRequestWaitTime(numReq)
+	requestsProcessed = pool.GetRequests()
+	requestsDropped = waitingRoom.ReqDropped
 	return
-}
-
-// this function implements the drop with timeout pattern
-func processOrDrop(ctx context.Context, req request.Request, inPoolCh chan<- request.Request, wgReq *sync.WaitGroup, timeout int) {
-	defer wgReq.Done()
-
-	// the timeout context
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*timeUnit)
-	defer cancel()
-
-	// wait until the request enters the input channel of the worker pool or the context times out
-	select {
-	case inPoolCh <- req:
-		// the request is sent to the input channel of the pool
-	case <-ctx.Done():
-		// the context times out and the request is dropped
-		fmt.Printf("Request %v dropped\n", req.Param)
-		muReqDropped.Lock()
-		requestDropped++
-		muReqDropped.Unlock()
-	}
 }

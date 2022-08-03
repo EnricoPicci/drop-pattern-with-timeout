@@ -22,6 +22,8 @@ type WorkerPool struct {
 	inChan chan request.Request
 	// wait group used to control the closing of the pool
 	wgPool sync.WaitGroup
+	// protect the update of request related data
+	muReq sync.Mutex
 	// requests processed
 	requests []request.Request
 
@@ -33,8 +35,6 @@ type WorkerPool struct {
 	// measure the time spent by workers idle, i.e. ready to process a request but with no request coming in
 	muWorkersIdleTime sync.Mutex
 	workersIdleTime   time.Duration
-	// protect the update of request related data
-	muReq sync.Mutex
 	// measure the time spent by requests waiting to be taken in by a worker
 	cumulativeReqWaitTime time.Duration
 

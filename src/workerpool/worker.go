@@ -37,7 +37,6 @@ func (w *Worker) start(pool *WorkerPool) {
 		w.execReq(req, time.Duration(pool.procTime)*pool.timeUnit)
 
 		pool.addRequest(req)
-		pool.addRequest(req)
 
 		startIdleTime = time.Now()
 	}

@@ -20,7 +20,7 @@ func TestWorkerPoolWithDropPattern_balanced_system(t *testing.T) {
 	// set procs to 1 to limit variance in the tests
 	runtime.GOMAXPROCS(1)
 
-	idleTime, waitTime := workerPoolWithDropPattern(poolSize, reqInterval, procTime, numReq, haltPoolTime, haltPoolDuration, timeout)
+	idleTime, waitTime, _, _ := workerPoolWithDropPattern(poolSize, reqInterval, procTime, numReq, haltPoolTime, haltPoolDuration, timeout)
 
 	// test that the idle time is not too high - this is a test based on the results obtained on my machine
 	if idleTime > 1*time.Second {
@@ -50,7 +50,7 @@ func TestWorkerPoolWithDropPattern_many_workers(t *testing.T) {
 	// set procs to 1 to limit variance in the tests
 	runtime.GOMAXPROCS(1)
 
-	idleTime, waitTime := workerPoolWithDropPattern(poolSize, reqInterval, procTime, numReq, haltPoolTime, haltPoolDuration, timeout)
+	idleTime, waitTime, _, _ := workerPoolWithDropPattern(poolSize, reqInterval, procTime, numReq, haltPoolTime, haltPoolDuration, timeout)
 
 	// test that the idle time is not too high - this is a test based on the results obtained on my machine
 	if idleTime < 5*time.Second {
@@ -81,7 +81,7 @@ func TestWorkerPoolWithDropPattern_temporary_block_occurs(t *testing.T) {
 	// set procs to 1 to limit variance in the tests
 	runtime.GOMAXPROCS(1)
 
-	idleTime, waitTime := workerPoolWithDropPattern(poolSize, reqInterval, procTime, numReq, haltPoolTime, haltPoolDuration, timeout)
+	idleTime, waitTime, requestsProcessed, requestsDropped := workerPoolWithDropPattern(poolSize, reqInterval, procTime, numReq, haltPoolTime, haltPoolDuration, timeout)
 
 	// test that the idle time is not too high - this is a test based on the results obtained on my machine
 	if idleTime > 1*time.Second {
@@ -89,12 +89,40 @@ func TestWorkerPoolWithDropPattern_temporary_block_occurs(t *testing.T) {
 	}
 	t.Logf("Idle time: %v", idleTime)
 
-	// test that the wait time is not too high since there is a timeout
+	// test that the wait time of the last requests sent to the pool is close to the timeout
 	// consider just the last requests so that we ignore the first ones, not affected by the delay, and the ones that had a much longer wait time
-	// given that they were affected by the long delay
+	// given that they had already entered the worker pool when the halt occurred
 	// this is a test based on the results obtained on my machine
-	if waitTime > time.Duration(timeout*3)*time.Millisecond {
+	timeoutDuration := time.Duration(timeout) * timeUnit
+	lowerWaitTimeThreshold := timeout * 9 / 10
+	lowerWaitTimeThresholdDuration := time.Duration(lowerWaitTimeThreshold) * timeUnit
+	lastRequestsProcessed := requestsProcessed[len(requestsProcessed)-10:]
+	for _, req := range lastRequestsProcessed {
+		if req.WaitDuration > timeoutDuration {
+			t.Errorf("The last requests processed should have waited less then the timeout %v - the request %v has waited %v",
+				timeoutDuration, req.Param, req.WaitDuration)
+		}
+		if req.WaitDuration < lowerWaitTimeThresholdDuration {
+			t.Errorf("The wait time for the last requests processed should close to the value of timeout %v - the request %v has waited %v",
+				lowerWaitTimeThresholdDuration, req.Param, req.WaitDuration)
+		}
+	}
+	if waitTime > time.Duration(timeout*3)*timeUnit {
 		t.Errorf("The wait time seems too high: %v", waitTime)
 	}
+
+	// test that there are some requests which have been dropped
+	if len(requestsDropped) == 0 {
+		t.Error("Some requests should have been dropped")
+	}
+
+	// test that all requests have been either sent to the pool or dropped
+	numReqProcessed := len(requestsProcessed)
+	numReqDropped := len(requestsDropped)
+	if numReqProcessed+numReqDropped != numReq {
+		t.Errorf("Some requests are missing. Requests processed: %v - Requests dropped: %v - Requests expected: %v",
+			numReqProcessed, numReqDropped, numReq)
+	}
+
 	t.Logf("Wait time: %v", waitTime)
 }
