@@ -66,9 +66,14 @@ func TestWorkerPoolWithoutDropPattern_many_workers(t *testing.T) {
 // If the system is balanced so that it can process the flow of requests without introducing wait time for the requests and without
 // keeping workers idle, but then an event occurs that introduces a delay (a temporary block), then the delay is propageted over time
 func TestWorkerPoolWithoutDropPattern_temporary_block_occurs(t *testing.T) {
-	poolSize := 10
+	// use a pool size of 1 for this test so that the requests have to be processed one by one and so we can see, as effect of the stop,
+	// a delay very close to the duration of the stop for all requests - if we had more than one worker, some requests would have to wait less than
+	// the others since they arrive in after the stop occurred and therefore they have a lower delay.
+	// For instance, if we have 2 workers and each request come in every 1 sec, as soon as the stop occurs the first request will have to wait
+	// for the intire duration of the stop while the following one will arrive 1 sec later and therefore will have to wait 1 sec less
+	poolSize := 1
 	reqInterval := 100
-	procTime := 1000
+	procTime := 100
 	numReq := 100
 
 	haltPoolTime := 1000

@@ -2,7 +2,7 @@
 
 In this example we implement the drop pattern using a worker pool.
 
-THe worker pool, by default, is balanced in terms of its throughput and the frequency of incoming requests. In other words the number of workers is able to process the requests coming in without too much delay for the requests and without too much idle time of the workers. The workers are not idle for long and the requests do not wait too long to enter in the pool to be processed.
+The worker pool, by default, is balanced in terms of its throughput and the frequency of incoming requests. In other words the number of workers is able to process the requests coming in without too much delay for the requests and without too much idle time of the workers. The workers are not idle for long and the requests do not wait too long to enter in the pool to be processed.
 
 This is obtained having a pool size of 10 (10 workers), a processing time of 1000ms and an interval between 2 requests of 100ms. This means that in 1 sec (the time a worker takes to process a request) there are 10 requests coming in and 10 workers able to process them. This is a situation of equilibrium.
 
@@ -42,7 +42,7 @@ From the root project folder run the command
 
 ### the worker pool stops working for a certain period
 
-If a sudden event occurs which halts all workers at a certain point in time for a certain duration, then this introduces a delay in the processing of the requests entering after this event and this delay is propagated over time.
+If a sudden event occurs which halts all workers at a certain point in time for a certain duration, then this introduces a delay in the processing of the requests entering after this event. In order to avoid to propagate this delay to all requests arriving after the stop, we introduce a timeout which will cause some requests to be dropped but all the subsequent requests to experience the a delay close to the value of the timeout after the pool comes back to normal operation.
 
 With the following command we introduce an halt of 2 secs after the 1 sec from the start of the processing. We can see that the requests in the pool when the block occurs are affected by a wait time of about 2 secs, i.e. the duration of the halt.
 

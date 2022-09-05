@@ -22,14 +22,18 @@ type WorkerPool struct {
 	inChan chan request.Request
 	// wait group used to control the closing of the pool
 	wgPool sync.WaitGroup
+
 	// protect the update of request related data
 	muReq sync.Mutex
 	// requests processed
 	requests []request.Request
 
-	// a flag that signals if the halt period has already passed
-	muHaltPeriodPassedCounter sync.Mutex
-	haltPeriodPassedCounter   int
+	// a flag that signals if thethe server is halted
+	halted   bool
+	muHalted sync.Mutex
+	// the channels stored in restoredChans will be closed when the pool is restored to signal that the server is back to normal operations
+	restoredChans []chan struct{}
+
 	// the time when the pool is started
 	startPoolTime time.Time
 	// measure the time spent by workers idle, i.e. ready to process a request but with no request coming in
@@ -38,7 +42,7 @@ type WorkerPool struct {
 	// measure the time spent by requests waiting to be taken in by a worker
 	cumulativeReqWaitTime time.Duration
 
-	timeUnit time.Duration
+	TimeUnit time.Duration
 }
 
 func NewWorkerPool(
@@ -57,10 +61,15 @@ func NewWorkerPool(
 		procTime:         procTime,
 		haltPoolTime:     haltPoolTime,
 		haltPoolDuration: haltPoolDuration,
-		timeUnit:         timeUnit,
+		TimeUnit:         timeUnit,
 
 		requests: make([]request.Request, 0, numReq),
 	}
+
+	// manages the halt and restore of the server based on the values of haltPoolTime and haltPoolDuration properties
+	go wp.halt()
+	go wp.restore()
+
 	return &wp
 }
 
@@ -86,7 +95,8 @@ func (wp *WorkerPool) Stop() {
 	wp.wgPool.Wait()
 }
 
-// add the time a request has waited before the pool has taken it in to start its processing
+// add a request to the collection of requests processed by the pool and
+// update the cumulative time that measure how long requests have waited before entering the pool to start processing
 func (wp *WorkerPool) addRequest(req request.Request) {
 	wp.muReq.Lock()
 	wp.requests = append(wp.requests, req)
@@ -117,22 +127,50 @@ func (wp *WorkerPool) GetRequests() []request.Request {
 	return wp.requests
 }
 
-// returns true if the pool has to be halted, i.e. if the time when the halt has to occurr has passed and the duration of the halt has not been passed
-func (wp *WorkerPool) isPoolToHalt() bool {
+// sets the halted flag to true when the server has to be halted
+func (wp *WorkerPool) halt() {
 	// after haltPoolTime the pool is halted
-	haltPoolAfter := time.Duration(wp.haltPoolTime) * wp.timeUnit
-	haltPool := time.Since(wp.startPoolTime) > haltPoolAfter
-	wp.muHaltPeriodPassedCounter.Lock()
-	haltPeriodNotPassed := wp.haltPeriodPassedCounter < wp.poolSize
-	wp.muHaltPeriodPassedCounter.Unlock()
-	return haltPool && haltPeriodNotPassed
+	haltPoolAfter := time.Duration(wp.haltPoolTime) * wp.TimeUnit
+	time.Sleep(haltPoolAfter)
+	wp.muHalted.Lock()
+	wp.halted = true
+	wp.muHalted.Unlock()
 }
 
-// the pool is halted for the duration specified
-func (wp *WorkerPool) halt() {
-	haltDuration := time.Duration(wp.haltPoolDuration) * wp.timeUnit
-	time.Sleep(haltDuration)
-	wp.muHaltPeriodPassedCounter.Lock()
-	wp.haltPeriodPassedCounter++
-	wp.muHaltPeriodPassedCounter.Unlock()
+// if the server is halted it waits until it is restored to normal operations
+func (wp *WorkerPool) waitIfHalted() {
+	var isHalted bool
+	var restored chan struct{}
+	// if the pool is halted, we want to add a chan to the "restoredChans" slice in an isolated way, i.e. we want to avoid the risk
+	// that in another goroutine the pool is restored to normal work before we have added the chan to the "restoredChans" slice
+	wp.muHalted.Lock()
+	isHalted = wp.halted
+	if isHalted {
+		restored = make(chan struct{})
+		wp.restoredChans = append(wp.restoredChans, restored)
+	}
+	// if the pool is halted we wait until the restored channel signals - this is done outside the Lock on the wp.muHalted otherwise the first goroutine
+	// running a worker that enters the wp.muHalted Lock block would bring to a stall since the signalling to the restored channel is also protected
+	// by the same semaphore
+	wp.muHalted.Unlock()
+	if isHalted {
+		// restored is closed when the server is restored to signal that operations are back to normal
+		<-restored
+	}
+}
+
+// reset the halted flag to false when the server has to be come back to life
+func (wp *WorkerPool) restore() {
+	// when the halt period has elapsed we restore the server and signal all which are interested that the server is back
+	// by closing the channel they have passed in
+	haltPoolAfter := time.Duration(wp.haltPoolTime) * wp.TimeUnit
+	haltDuration := time.Duration(wp.haltPoolDuration) * wp.TimeUnit
+	time.Sleep(haltPoolAfter + haltDuration)
+	// the write on wp.muHalted is protected by a semaphore to prevent concurrent writing
+	wp.muHalted.Lock()
+	wp.halted = false
+	for i := range wp.restoredChans {
+		close(wp.restoredChans[i])
+	}
+	wp.muHalted.Unlock()
 }

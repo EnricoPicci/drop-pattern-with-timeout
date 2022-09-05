@@ -47,11 +47,22 @@ func workerPoolWithDropPattern(
 	numReq int,
 	haltPoolTime int,
 	haltPoolDuration int,
-	timeout int) (idleTime time.Duration, waitTime time.Duration, requestsProcessed []request.Request, requestsDropped []request.Request) {
+	timeout int) (idleTime time.Duration, waitTime time.Duration, requestsProcessed []request.Request, requestsDropped []request.Request,
+) {
+	pool, waitingRoom := newPoolAndWaitingRoom(poolSize, reqInterval, procTime, numReq, haltPoolTime, haltPoolDuration, timeout)
 
-	fmt.Println("Start processing requests")
-	fmt.Print("\n")
+	idleTime, waitTime, requestsProcessed, requestsDropped = _workerPoolWithDropPattern(pool, waitingRoom, numReq, reqInterval)
+	return
+}
 
+func newPoolAndWaitingRoom(
+	poolSize int,
+	reqInterval int,
+	procTime int,
+	numReq int,
+	haltPoolTime int,
+	haltPoolDuration int,
+	timeout int) (*workerpool.WorkerPool, *waitingroom.WaitingRoom) {
 	// the channel that provides requests to the pool is unbuffered - this is mandatory for the drop pattern to work
 	inPoolCh := make(chan request.Request)
 	pool := workerpool.NewWorkerPool(inPoolCh, poolSize, reqInterval, procTime, numReq, haltPoolTime, haltPoolDuration, timeUnit)
@@ -59,6 +70,19 @@ func workerPoolWithDropPattern(
 	// the channel that allows request to enter the waiting room
 	waitingRoomCh := make(chan request.Request)
 	waitingRoom := waitingroom.New(waitingRoomCh, inPoolCh, timeout, timeUnit)
+	return pool, waitingRoom
+}
+
+func _workerPoolWithDropPattern(
+	pool *workerpool.WorkerPool,
+	waitingRoom *waitingroom.WaitingRoom,
+	numReq int,
+	reqInterval int) (
+	idleTime time.Duration, waitTime time.Duration, requestsProcessed []request.Request, requestsDropped []request.Request,
+) {
+
+	fmt.Println("Start processing requests")
+	fmt.Print("\n")
 
 	// start the worker pool
 	pool.Start()

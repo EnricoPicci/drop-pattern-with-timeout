@@ -22,6 +22,9 @@ type WaitingRoom struct {
 	ReqDropped   []request.Request
 
 	WgReq sync.WaitGroup
+
+	// holds the number of requests which are waiting in the waiting room
+	QueueLength int
 }
 
 func New(inChan chan request.Request, outChan chan request.Request, timeout int, timeUnit time.Duration) *WaitingRoom {
@@ -66,6 +69,7 @@ func (wr *WaitingRoom) sendOrDrop(ctx context.Context, req request.Request) {
 	ctx, cancel := context.WithTimeout(ctx, wr.getTimeout())
 	defer cancel()
 
+	wr.QueueLength++
 	// wait until the request enters the input channel of the worker pool or the context times out
 	select {
 	case wr.outChan <- req:
@@ -75,6 +79,7 @@ func (wr *WaitingRoom) sendOrDrop(ctx context.Context, req request.Request) {
 		// the context times out and the request is dropped
 		wr.drop(req)
 	}
+	wr.QueueLength--
 }
 
 func (wr *WaitingRoom) sentToPool(req request.Request) {

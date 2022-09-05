@@ -39,7 +39,7 @@ From the root project folder run the command
 
 If a sudden event occurs which halts all workers at a certain point in time for a certain duration, then this introduces a delay in the processing of the requests entering after this event and this delay is propagated over time.
 
-With the following command we introduce an halt of 2 secs after the 1 sec from the start of the processing. We can see that all requests processed after the halt periodo has ended are affected by a wait time of about 2 secs, i.e. the duration of the halt.
+With the following command we introduce an halt of 2 secs after the 1 sec from the start of the processing. We can see that all requests processed after the halt period has ended are affected by a wait time of about 2 secs, i.e. the duration of the halt.
 
 This is similar to what happens in an high traffic highway. When there are no blockers, all the cars flow more or less at the same speed given that the traffic is high and nobody can go too fast (there is not much space between one car and the next and all lanes are busy). As soon a block occurs, e.g. for a car crash, a queue starts and cars are blocked. When the obstacle is removed and traffic can get back to normal, if the traffic remains heavy, for many hours cars will have to stop for more or less the same amount of time that the previous cars spent blocked.
 

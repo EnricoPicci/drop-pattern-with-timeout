@@ -25,16 +25,14 @@ func (w *Worker) start(pool *WorkerPool) {
 		// add the time spent idle - the startIdleTime value is reset at the end of the processing logic
 		pool.addIdleTime(startIdleTime)
 
-		if pool.isPoolToHalt() {
-			// the pool is halted for the duration specified
-			pool.halt()
-		}
+		pool.waitIfHalted()
+
 		// calculate how long the request has been waiting before being picked up by one worker of the pool
 		waitDuration := time.Since(req.Created)
 		req.WaitDuration = waitDuration
 
 		// execute the request
-		w.execReq(req, time.Duration(pool.procTime)*pool.timeUnit)
+		w.execReq(req, time.Duration(pool.procTime)*pool.TimeUnit)
 
 		pool.addRequest(req)
 
