@@ -90,15 +90,7 @@ func _workerPoolWithDropPattern(
 	waitingRoom.Open()
 
 	// we simulate a stream of incoming requests
-	for i := 0; i < numReq; i++ {
-		// interval between each incoming request
-		var intervalBetweenRequests = time.Duration(reqInterval) * timeUnit
-		time.Sleep(time.Duration(intervalBetweenRequests))
-		req := request.Request{Param: i, Created: time.Now()}
-
-		// the request is sent to the waiting room
-		waitingRoom.LetIn(req)
-	}
+	sendRequestsToWaitingRoom(numReq, reqInterval, waitingRoom)
 
 	// close the waiting room since there are no more requests that can arrive
 	waitingRoom.Close()
@@ -110,4 +102,17 @@ func _workerPoolWithDropPattern(
 	requestsProcessed = pool.GetRequests()
 	requestsDropped = waitingRoom.ReqDropped
 	return
+}
+
+// simulates a stream of incoming requests
+func sendRequestsToWaitingRoom(numReq int, reqInterval int, waitingRoom *waitingroom.WaitingRoom) {
+	for i := 0; i < numReq; i++ {
+		// interval between each incoming request
+		var intervalBetweenRequests = time.Duration(reqInterval) * timeUnit
+		time.Sleep(time.Duration(intervalBetweenRequests))
+		req := request.Request{Param: i, Created: time.Now()}
+
+		// the request is sent to the waiting room
+		waitingRoom.LetIn(req)
+	}
 }
